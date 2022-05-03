@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 #include <iostream>
+#include <numeric>
 
 using namespace std;
 
@@ -359,14 +360,18 @@ void TestExcludeStopWordsFromAddedDocumentContent() {
 }
 
 void TestExcludeDocumentsWithMinusWords() {
-    const int doc_id = 42;
-    const string content = "cat in the city"s;
-    const vector<int> ratings = {1, 2, 3};
+    const int doc_id1 = 42;
+    const string content1 = "cat in the city"s;
+    const vector<int> ratings1 = {1, 2, 3};
+    const int doc_id2 = 43;
+    const string content2 = "dog in the city"s;
+    const vector<int> ratings2 = {4, 5, 6};
     {
         SearchServer server;
-        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        server.AddDocument(doc_id1, content1, DocumentStatus::ACTUAL, ratings1);
+        server.AddDocument(doc_id2, content2, DocumentStatus::ACTUAL, ratings2);
         const auto found_docs = server.FindTopDocuments("-cat in city"s);
-        ASSERT_HINT(found_docs.empty(), "Documents with minus words must be excluded"s);
+        ASSERT_HINT(found_docs.size() == 1 && found_docs[0].id == doc_id2, "Documents with minus words must be excluded"s);
     }
 }
 
@@ -390,21 +395,39 @@ void TestNotMatchingDocumentsWithMinusWords() {
     }
 }
 
-void TestSortingDocumentsByRelevance() {
+void TestSortingDocumentsByRelevanceAndRating() {
     const int doc_id1 = 42;
-    const string content1 = "cat in the city"s;
+    const string content1 = "cat is looking at dog"s;
     const vector<int> ratings1 = {1, 2, 3};
-    const int doc_id2 = 12;
-    const string content2 = "dog is barking on cat"s;
-    const vector<int> ratings2 = {3, 4, 5};
+
+    const int doc_id2 = 43;
+    const string content2 = "dog doesn't like cat"s;
+    const vector<int> ratings2 = {2, 3, 4};
+
+    const int doc_id3 = 44;
+    const string content3 = "cat afraids a dog"s;
+    const vector<int> ratings3 = {3, 4, 5};
+
+    const int doc_id4 = 45;
+    const string content4 = "cat likes fish"s;
+    const vector<int> ratings4 = {4, 5, 6};
     {
         SearchServer server;
         server.AddDocument(doc_id1, content1, DocumentStatus::ACTUAL, ratings1);
         server.AddDocument(doc_id2, content2, DocumentStatus::ACTUAL, ratings2);
+        server.AddDocument(doc_id3, content3, DocumentStatus::ACTUAL, ratings3);
+        server.AddDocument(doc_id4, content4, DocumentStatus::ACTUAL, ratings4);
+
         const auto found_docs = server.FindTopDocuments("dog and cat"s);
-        const vector<int> doc_ids = {found_docs[0].id, found_docs[1].id};
-        const vector<int> ids = {doc_id2, doc_id1};
-        ASSERT_EQUAL_HINT(doc_ids, ids, "Founded documents must be sorting by relevance"s);
+        for (int i = 1; i < found_docs.size(); ++i) {
+            const auto& prev = found_docs[i - 1];
+            const auto& curr = found_docs[i];
+            if ((prev.relevance - curr.relevance) < 1e-6) {
+                ASSERT_HINT(prev.rating > curr.rating, "Founded documents must be sorting by rating if relevance is equal"s);
+            } else {
+                ASSERT_HINT((prev.relevance - curr.relevance) > 1e-6, "Founded documents must be sorting by relevance"s);
+            }
+        }
     }
 }
 
@@ -416,7 +439,8 @@ void TestCalculationOfRatingAddedDocuments() {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
         const auto found_docs = server.FindTopDocuments("cat in city"s);
-        ASSERT_EQUAL_HINT(found_docs[0].rating, 2, "Ratings of documents is average of sums"s);
+        const int average_of_sums = accumulate(begin(ratings), end(ratings), 0) / ratings.size();
+        ASSERT_EQUAL_HINT(found_docs[0].rating, average_of_sums, "Ratings of documents is average of sums"s);
     }
 }
 
@@ -442,11 +466,21 @@ void TestFindDocumentsWithStatus() {
     const int doc_id = 42;
     const string content = "cat in the city"s;
     const vector<int> ratings = {1, 2, 3};
+
+    const int doc_id2 = 43;
+    const string content2 = "fat cat"s;
+    const vector<int> ratings2 = {1, 2, 3};
+
+    const int doc_id3 = 44;
+    const string content3 = "little cat"s;
+    const vector<int> ratings3 = {1, 2, 3};
     {
         SearchServer server;
         server.AddDocument(doc_id, content, DocumentStatus::BANNED, ratings);
-        const auto found_docs = server.FindTopDocuments("cat in city"s, DocumentStatus::BANNED);
-        ASSERT_EQUAL_HINT(found_docs.size(), 1, "All founded docs with given status must be returned"s);
+        server.AddDocument(doc_id2, content2, DocumentStatus::REMOVED, ratings2);
+        server.AddDocument(doc_id3, content3, DocumentStatus::ACTUAL, ratings3);
+        const auto found_docs = server.FindTopDocuments("cat"s, DocumentStatus::BANNED);
+        ASSERT_HINT(found_docs.size() == 1 && found_docs[0].id == doc_id , "All founded docs with given status must be returned"s);
     }
 }
 
@@ -454,16 +488,20 @@ void TestCalculationOfRelevanceAddedDocuments() {
     const int doc_id1 = 42;
     const string content1 = "cat in the city"s;
     const vector<int> ratings1 = {1, 2, 3};
+
     const int doc_id2 = 12;
     const string content2 = "dog is barking on cat"s;
     const vector<int> ratings2 = {3, 4, 5};
-    const double relevance = 0.1386294;
+
     {
         SearchServer server;
         server.AddDocument(doc_id1, content1, DocumentStatus::ACTUAL, ratings1);
         server.AddDocument(doc_id2, content2, DocumentStatus::ACTUAL, ratings2);
         const auto found_docs = server.FindTopDocuments("dog and cat"s);
-        ASSERT_HINT(found_docs[0].relevance - relevance < 1e-6, "Relevance of documents must be equal TF IDF of terms between all documents"s);
+        const double term_freq = 1.0 / 5;
+        const double relevance = log(server.GetDocumentCount() / 1.0) * term_freq;
+        const double doc_relevance = found_docs[0].relevance;
+        ASSERT_HINT(doc_relevance > 0 && doc_relevance - relevance < 1e-6, "Relevance of documents must be equal TF IDF of terms between all documents"s);
     }
 }
 
@@ -471,7 +509,7 @@ void TestSearchServer() {
     RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
     RUN_TEST(TestExcludeDocumentsWithMinusWords);
     RUN_TEST(TestNotMatchingDocumentsWithMinusWords);
-    RUN_TEST(TestSortingDocumentsByRelevance);
+    RUN_TEST(TestSortingDocumentsByRelevanceAndRating);
     RUN_TEST(TestCalculationOfRatingAddedDocuments);
     RUN_TEST(TestUserPredicateToFindDocuments);
     RUN_TEST(TestFindDocumentsWithStatus);

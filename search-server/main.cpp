@@ -422,10 +422,10 @@ void TestSortingDocumentsByRelevanceAndRating() {
         for (int i = 1; i < found_docs.size(); ++i) {
             const auto& prev = found_docs[i - 1];
             const auto& curr = found_docs[i];
-            if ((prev.relevance - curr.relevance) < 1e-6) {
+            if (abs(prev.relevance - curr.relevance) < 1e-6) {
                 ASSERT_HINT(prev.rating > curr.rating, "Founded documents must be sorting by rating if relevance is equal"s);
             } else {
-                ASSERT_HINT((prev.relevance - curr.relevance) > 1e-6, "Founded documents must be sorting by relevance"s);
+                ASSERT_HINT(abs(prev.relevance - curr.relevance) > 1e-6, "Founded documents must be sorting by relevance"s);
             }
         }
     }
@@ -501,7 +501,7 @@ void TestCalculationOfRelevanceAddedDocuments() {
         const double term_freq = 1.0 / 5;
         const double relevance = log(server.GetDocumentCount() / 1.0) * term_freq;
         const double doc_relevance = found_docs[0].relevance;
-        ASSERT_HINT(doc_relevance > 0 && doc_relevance - relevance < 1e-6, "Relevance of documents must be equal TF IDF of terms between all documents"s);
+        ASSERT_HINT(abs(doc_relevance - relevance) < 1e-6, "Relevance of documents must be equal TF IDF of terms between all documents"s);
     }
 }
 

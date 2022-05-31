@@ -15,6 +15,7 @@ void SearchServer::AddDocument(int document_id, const string& document, Document
     const double inv_word_count = 1.0 / words.size();
     for (const string& word : words) {
         word_to_document_freqs_[word][document_id] += inv_word_count;
+        document_to_word_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
     document_ids_.push_back(document_id);
@@ -33,10 +34,6 @@ vector<Document> SearchServer::FindTopDocuments(const string& raw_query) const {
 
 int SearchServer::GetDocumentCount() const {
     return documents_.size();
-}
-
-int SearchServer::GetDocumentId(int index) const {
-    return document_ids_.at(index);
 }
 
 tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& raw_query, int document_id) const {
@@ -87,7 +84,7 @@ vector<string> SearchServer::SplitIntoWordsNoStop(const string& text) const {
 }
 
 int SearchServer::ComputeAverageRating(const vector<int>& ratings) {
-    return accumulate(begin(ratings), end(ratings), 0) / static_cast<int>(ratings.size());
+    return accumulate(ratings.begin(), ratings.end(), 0) / static_cast<int>(ratings.size());
 }
 
 SearchServer::QueryWord SearchServer::ParseQueryWord(const string& text) const {
@@ -123,4 +120,23 @@ SearchServer::Query SearchServer::ParseQuery(const string& text) const {
 
 double SearchServer::ComputeWordInverseDocumentFreq(const string& word) const {
     return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
+}
+
+const map<string, double>& SearchServer::GetWordFrequencies(int document_id) const {
+    if (document_to_word_freqs_.count(document_id)) {
+        return document_to_word_freqs_.at(document_id);
+    }
+
+    static const map<string, double> m;
+    return m;
+}
+
+void SearchServer::RemoveDocument(int document_id) {
+    for (const auto& [word, _] : document_to_word_freqs_[document_id]) {
+        word_to_document_freqs_[word].erase(document_id);
+    }
+    document_to_word_freqs_.erase(document_id);
+    documents_.erase(document_id);
+    const auto it = remove(document_ids_.begin(), document_ids_.end(), document_id);
+    document_ids_.erase(it, document_ids_.end());
 }

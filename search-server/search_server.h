@@ -1,4 +1,5 @@
 #pragma once
+
 #include <vector>
 #include <set>
 #include <string>
@@ -7,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+
 #include "string_processing.h"
 #include "document.h"
 

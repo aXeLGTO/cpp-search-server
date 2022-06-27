@@ -1,0 +1,1 @@
+g++ `ls *.cpp` -std=c++17 -O3 -Wall -Werror -ltbb -lpthread -o search_server

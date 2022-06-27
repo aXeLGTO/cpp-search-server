@@ -1,0 +1,1 @@
+g++ `ls *.cpp` -std=c++17 -ltbb -lpthread -Wall -Werror -O0 -fno-omit-frame-pointer -fno-optimize-sibling-calls -g -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC -D_LIBCPP_DEBUG=1 -fsanitize=address -o search_server

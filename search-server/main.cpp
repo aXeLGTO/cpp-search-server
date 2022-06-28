@@ -1,18 +1,16 @@
-#include "process_queries.h"
 #include "search_server.h"
+#include "log_duration.h"
 #include "test_example_functions.h"
-#include "document.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
+#include <execution>
+#include <random>
 
 using namespace std;
 
 int main() {
-    TestSearchServer();
-    cerr << "Search server testing finished"s << endl << endl;
-
     SearchServer search_server("and with"s);
 
     int id = 0;
@@ -28,52 +26,44 @@ int main() {
         search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
     }
 
-    const vector<string> queries = {
-        "nasty rat -not"s,
-        "not very funny nasty pet"s,
-        "curly hair"s
+    const string query = "curly and funny"s;
+
+    auto report = [&search_server, &query] {
+        cout << search_server.GetDocumentCount() << " documents total, "s
+            << search_server.FindTopDocuments(query).size() << " documents for query ["s << query << "]"s << endl;
     };
 
-    cout << "* ProcessQueriesJoined *"s << endl;
-    for (const Document& document : ProcessQueriesJoined(search_server, queries)) {
-        cout << "Document "s << document.id << " matched with relevance "s << document.relevance << endl;
-    }
-    cout << endl;
+    report();
+    // однопоточная версия
+    search_server.RemoveDocument(5);
+    report();
+    // однопоточная версия
+    search_server.RemoveDocument(execution::seq, 1);
+    report();
+    // многопоточная версия
+    search_server.RemoveDocument(execution::par, 2);
+    report();
 
-    cout << "* ProcessQueries *"s << endl;
-    for (const vector<Document>& documents : ProcessQueries(search_server, queries)) {
-        for (const auto document : documents) {
-            cout << "Document "s << document.id << " matched with relevance "s << document.relevance << endl;
-        }
-    }
-    cout << endl;
+    mt19937 generator;
 
-    TestBenchmarkQueries();
-    cout << endl;
-
-    TestBenchmarkQueriesJoined();
+    const auto dictionary = GenerateDictionary(generator, 10'000, 25);
+    const auto documents = GenerateQueries(generator, dictionary, 10'000, 100);
 
     {
-        mt19937 generator;
-        const auto dictionary = GenerateDictionary(generator, 2'000, 25);
-        const auto documents = GenerateQueries(generator, dictionary, 20'000, 10);
-
         SearchServer search_server(dictionary[0]);
         for (size_t i = 0; i < documents.size(); ++i) {
             search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL, {1, 2, 3});
         }
 
-        const auto queries = GenerateQueries(generator, dictionary, 2'000, 7);
-        {
-            LOG_DURATION("Trivial"s);
-            vector<Document> documents_lists;
-            for (const std::string& query : queries) {
-                const auto documents = search_server.FindTopDocuments(query);
-                for (const auto document : documents) {
-                    documents_lists.push_back(document);
-                }
-            }
+        TEST_REMOVE(seq);
+    }
+    {
+        SearchServer search_server(dictionary[0]);
+        for (size_t i = 0; i < documents.size(); ++i) {
+            search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL, {1, 2, 3});
         }
+
+        TEST_REMOVE(par);
     }
 
     return 0;

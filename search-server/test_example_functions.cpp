@@ -153,7 +153,7 @@ void TestBenchmarkQueries() {
     }
 
     const auto queries = GenerateQueries(generator, dictionary, 2'000, 7);
-    TEST(ProcessQueries);
+    TEST_QUERY(ProcessQueries);
 }
 
 void TestBenchmarkQueriesJoined() {
@@ -167,7 +167,7 @@ void TestBenchmarkQueriesJoined() {
     }
 
     const auto queries = GenerateQueries(generator, dictionary, 2'000, 7);
-    TEST(ProcessQueriesJoined);
+    TEST_QUERY(ProcessQueriesJoined);
 }
 
 void TestRequests() {

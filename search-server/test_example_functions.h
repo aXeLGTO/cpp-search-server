@@ -57,12 +57,12 @@ std::ostream& operator<<(std::ostream& os, const std::map<K, V>& m) {
 }
 
 template <typename QueriesProcessor>
-void Test(std::string_view mark, QueriesProcessor processor, const SearchServer& search_server, const std::vector<std::string>& queries) {
+void TestQuery(std::string_view mark, QueriesProcessor processor, const SearchServer& search_server, const std::vector<std::string>& queries) {
     LOG_DURATION(mark);
     const auto documents_lists = processor(search_server, queries);
 }
 
-#define TEST(processor) Test(#processor, processor, search_server, queries)
+#define TEST_QUERY(processor) TestQuery(#processor, processor, search_server, queries)
 
 void PrintDocument(const Document& document);
 
@@ -110,3 +110,16 @@ void TestCalculationOfRelevanceAddedDocuments();
 void TestSearchServer();
 
 int TestGeneral();
+
+template <typename ExecutionPolicy>
+void TestRemove(std::string_view mark, SearchServer search_server, ExecutionPolicy&& policy) {
+    LOG_DURATION(mark);
+    const int document_count = search_server.GetDocumentCount();
+    for (int id = 0; id < document_count; ++id) {
+        search_server.RemoveDocument(policy, id);
+    }
+    std::cout << search_server.GetDocumentCount() << std::endl;
+}
+
+#define TEST_REMOVE(mode) TestRemove(#mode, search_server, execution::mode)
+

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <execution>
 
 #include "string_processing.h"
 #include "document.h"
@@ -54,6 +55,9 @@ public:
 
     void RemoveDocument(int document_id);
 
+    template<typename Policy>
+    void RemoveDocument(Policy policy, int document_id);
+
 private:
     struct DocumentData {
         int rating;
@@ -64,7 +68,7 @@ private:
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, std::map<std::string, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
-    std::vector<int> document_ids_;
+    std::set<int> document_ids_;
 
     bool IsStopWord(const std::string& word) const;
 
@@ -154,4 +158,32 @@ SearchServer::SearchServer(const StringContainer& stop_words)
     if (!std::all_of(stop_words_.begin(), stop_words_.end(), IsValidWord)) {
         throw std::invalid_argument("Some of stop words are invalid");
     }
+}
+
+template<typename Policy>
+void SearchServer::RemoveDocument(Policy policy, int document_id) {
+    using namespace std;
+
+    if (document_ids_.count(document_id) == 0) {
+        return;
+    }
+
+    const auto& words_in_document = document_to_word_freqs_[document_id];
+    vector<string> words(words_in_document.size());
+    transform(
+            policy,
+            words_in_document.begin(), words_in_document.end(),
+            words.begin(),
+            [](const auto& p){
+                return p.first;
+            });
+    for_each(
+            policy,
+            words.begin(), words.end(),
+            [this, document_id](const auto& w) {
+                word_to_document_freqs_[w].erase(document_id);
+            });
+    document_to_word_freqs_.erase(document_id);
+    documents_.erase(document_id);
+    document_ids_.erase(document_id);
 }

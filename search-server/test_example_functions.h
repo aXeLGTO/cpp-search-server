@@ -79,7 +79,7 @@ std::string GenerateWord(std::mt19937& generator, int max_length);
 
 std::vector<std::string> GenerateDictionary(std::mt19937& generator, int word_count, int max_length);
 
-std::string GenerateQuery(std::mt19937& generator, const std::vector<std::string>& dictionary, int max_word_count);
+std::string GenerateQuery(std::mt19937& generator, const std::vector<std::string>& dictionary, int word_count, double minus_prob = 0);
 
 std::vector<std::string> GenerateQueries(std::mt19937& generator, const std::vector<std::string>& dictionary, int query_count, int max_word_count);
 
@@ -122,4 +122,22 @@ void TestRemove(std::string_view mark, SearchServer search_server, ExecutionPoli
 }
 
 #define TEST_REMOVE(mode) TestRemove(#mode, search_server, execution::mode)
+
+void TestBenchmarkRemove();
+
+void TestBenchmarkMatch();
+
+template <typename ExecutionPolicy>
+void TestMatch(std::string_view mark, SearchServer search_server, const std::string& query, ExecutionPolicy&& policy) {
+    LOG_DURATION(mark);
+    const int document_count = search_server.GetDocumentCount();
+    int word_count = 0;
+    for (int id = 0; id < document_count; ++id) {
+        const auto [words, status] = search_server.MatchDocument(policy, query, id);
+        word_count += words.size();
+    }
+    std::cout << word_count << std::endl;
+}
+
+#define TEST_MATCH(policy) TestMatch(#policy, search_server, query, execution::policy)
 

@@ -121,12 +121,14 @@ vector<string> GenerateDictionary(mt19937& generator, int word_count, int max_le
     return words;
 }
 
-string GenerateQuery(mt19937& generator, const vector<string>& dictionary, int max_word_count) {
-    const int word_count = uniform_int_distribution(1, max_word_count)(generator);
+string GenerateQuery(mt19937& generator, const vector<string>& dictionary, int word_count, double minus_prob) {
     string query;
     for (int i = 0; i < word_count; ++i) {
         if (!query.empty()) {
             query.push_back(' ');
+        }
+        if (uniform_real_distribution<>(0, 1)(generator) < minus_prob) {
+            query.push_back('-');
         }
         query += dictionary[uniform_int_distribution<int>(0, dictionary.size() - 1)(generator)];
     }
@@ -419,3 +421,55 @@ void TestSearchServer() {
 
     return 0;
 }*/
+
+void TestBenchmarkRemove() {
+    mt19937 generator;
+
+    const auto dictionary = GenerateDictionary(generator, 10'000, 25);
+    const auto documents = GenerateQueries(generator, dictionary, 10'000, 100);
+
+    {
+        SearchServer search_server(dictionary[0]);
+        for (size_t i = 0; i < documents.size(); ++i) {
+            search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL, {1, 2, 3});
+        }
+
+        TEST_REMOVE(seq);
+    }
+    {
+        SearchServer search_server(dictionary[0]);
+        for (size_t i = 0; i < documents.size(); ++i) {
+            search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL, {1, 2, 3});
+        }
+
+        TEST_REMOVE(par);
+    }
+}
+
+void TestBenchmarkMatch() {
+    mt19937 generator;
+
+    const auto dictionary = GenerateDictionary(generator, 1000, 10);
+    const auto documents = GenerateQueries(generator, dictionary, 10'000, 70);
+
+    const string query = GenerateQuery(generator, dictionary, 500, 0.1);
+
+    SearchServer search_server(dictionary[0]);
+    for (size_t i = 0; i < documents.size(); ++i) {
+        search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL, {1, 2, 3});
+    }
+
+    TEST_MATCH(seq);
+    TEST_MATCH(par);
+
+    {
+        LOG_DURATION("old"s);
+        const int document_count = search_server.GetDocumentCount();
+        int word_count = 0;
+        for (int id = 0; id < document_count; ++id) {
+            const auto [words, status] = search_server.MatchDocument(query, id);
+            word_count += words.size();
+        }
+        std::cout << word_count << std::endl;
+    }
+}

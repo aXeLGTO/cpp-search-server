@@ -39,6 +39,16 @@ int SearchServer::GetDocumentCount() const {
 tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& raw_query, int document_id) const {
     const auto query = ParseQuery(raw_query);
 
+    for (const string& word : query.minus_words) {
+        if (word_to_document_freqs_.count(word) == 0) {
+            continue;
+        }
+        if (word_to_document_freqs_.at(word).count(document_id)) {
+            static const vector<string> v;
+            return {v, documents_.at(document_id).status};
+        }
+    }
+
     vector<string> matched_words;
     for (const string& word : query.plus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
@@ -46,15 +56,6 @@ tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& 
         }
         if (word_to_document_freqs_.at(word).count(document_id)) {
             matched_words.push_back(word);
-        }
-    }
-    for (const string& word : query.minus_words) {
-        if (word_to_document_freqs_.count(word) == 0) {
-            continue;
-        }
-        if (word_to_document_freqs_.at(word).count(document_id)) {
-            matched_words.clear();
-            break;
         }
     }
     return {matched_words, documents_.at(document_id).status};
@@ -101,6 +102,22 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(const string& text) const {
         throw invalid_argument("Query word "s + text + " is invalid");
     }
     return {word, is_minus, IsStopWord(word)};
+}
+
+SearchServer::NoUniqueQuery SearchServer::ParseNoUniqueQuery(const string& text) const {
+    NoUniqueQuery result;
+    for (const string& word : SplitIntoWords(text)) {
+        const auto query_word = ParseQueryWord(word);
+        if (!query_word.is_stop) {
+            if (query_word.is_minus) {
+                result.minus_words.push_back(query_word.data);
+            } else {
+                result.plus_words.push_back(query_word.data);
+            }
+        }
+    }
+
+    return result;
 }
 
 SearchServer::Query SearchServer::ParseQuery(const string& text) const {

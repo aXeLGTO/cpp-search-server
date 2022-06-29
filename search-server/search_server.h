@@ -51,6 +51,9 @@ public:
 
     std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
 
+    template<typename Policy>
+    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(Policy&& policy, const std::string& raw_query, int document_id) const;
+
     const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
 
     void RemoveDocument(int document_id);
@@ -86,12 +89,18 @@ private:
 
     QueryWord ParseQueryWord(const std::string& text) const;
 
+    struct NoUniqueQuery {
+        std::vector<std::string> plus_words;
+        std::vector<std::string> minus_words;
+    };
+
     struct Query {
         std::set<std::string> plus_words;
         std::set<std::string> minus_words;
     };
 
     Query ParseQuery(const std::string& text) const;
+    NoUniqueQuery ParseNoUniqueQuery(const std::string& text) const;
 
     double ComputeWordInverseDocumentFreq(const std::string& word) const;
 
@@ -186,4 +195,42 @@ void SearchServer::RemoveDocument(Policy policy, int document_id) {
     document_to_word_freqs_.erase(document_id);
     documents_.erase(document_id);
     document_ids_.erase(document_id);
+}
+
+template<typename Policy>
+std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(Policy&& policy, const std::string& raw_query, int document_id) const {
+    using namespace std;
+
+    if (document_ids_.count(document_id) == 0) {
+        throw out_of_range("Document with id "s + to_string(document_id) + " not exist"s);
+    }
+
+    const auto query = ParseNoUniqueQuery(raw_query);
+
+    if (any_of(
+            policy,
+            query.minus_words.begin(), query.minus_words.end(),
+            [this, document_id](const auto& word){
+                return word_to_document_freqs_.at(word).count(document_id);
+            })) {
+        static const vector<string> v;
+        return {v, documents_.at(document_id).status};
+    }
+
+    vector<string> matched_words(query.plus_words.size());
+    auto it = copy_if(
+        policy,
+        query.plus_words.begin(), query.plus_words.end(),
+        matched_words.begin(),
+        [document_id, this](const auto& word){
+            return word_to_document_freqs_.at(word).count(document_id);
+        });
+
+    sort(policy, matched_words.begin(), it);
+    matched_words.erase(
+            unique(policy, matched_words.begin(), it),
+            matched_words.end()
+        );
+
+    return {matched_words, documents_.at(document_id).status};
 }

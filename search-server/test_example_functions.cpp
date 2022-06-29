@@ -22,12 +22,12 @@ void PrintDocument(const Document& document) {
          << "rating = "s << document.rating << " }"s << endl;
 }
 
-void PrintMatchDocumentResult(int document_id, const vector<string>& words, DocumentStatus status) {
+void PrintMatchDocumentResult(int document_id, const vector<string_view>& words, DocumentStatus status) {
     cout << "{ "s
          << "document_id = "s << document_id << ", "s
          << "status = "s << static_cast<int>(status) << ", "s
          << "words ="s;
-    for (const string& word : words) {
+    for (const auto& word : words) {
         cout << ' ' << word;
     }
     cout << "}"s << endl;
@@ -261,7 +261,7 @@ void TestNotMatchingDocumentsWithMinusWords() {
         SearchServer server(""s);
         server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
         const auto [matched_words, _] = server.MatchDocument("cat city"s, doc_id);
-        vector<string> expected_words = {"cat"s, "city"s};
+        vector<string_view> expected_words = {"cat"sv, "city"sv};
         ASSERT_EQUAL_HINT(matched_words, expected_words, "All founded words in document must be returned"s);
     }
 

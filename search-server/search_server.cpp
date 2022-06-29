@@ -36,15 +36,15 @@ int SearchServer::GetDocumentCount() const {
     return documents_.size();
 }
 
-tuple<vector<string>, DocumentStatus> SearchServer::MatchDocument(const string& raw_query, int document_id) const {
+tuple<vector<string_view>, DocumentStatus> SearchServer::MatchDocument(const string_view raw_query, int document_id) const {
     return MatchDocument(execution::seq, raw_query, document_id);
 }
 
-bool SearchServer::IsStopWord(const string& word) const {
+bool SearchServer::IsStopWord(string_view word) const {
     return stop_words_.count(word) > 0;
 }
 
-bool SearchServer::IsValidWord(const string& word) {
+bool SearchServer::IsValidWord(string_view word) {
     return none_of(word.begin(), word.end(), [](char c) {
         return c >= '\0' && c < ' ';
     });
@@ -67,25 +67,25 @@ int SearchServer::ComputeAverageRating(const vector<int>& ratings) {
     return accumulate(ratings.begin(), ratings.end(), 0) / static_cast<int>(ratings.size());
 }
 
-SearchServer::QueryWord SearchServer::ParseQueryWord(const string& text) const {
+SearchServer::QueryWord SearchServer::ParseQueryWord(string_view text) const {
     if (text.empty()) {
         throw invalid_argument("Query word is empty"s);
     }
-    string word = text;
+    string_view word = text;
     bool is_minus = false;
     if (word[0] == '-') {
         is_minus = true;
         word = word.substr(1);
     }
     if (word.empty() || word[0] == '-' || !IsValidWord(word)) {
-        throw invalid_argument("Query word "s + text + " is invalid");
+        throw invalid_argument("Query word "s + string{text} + " is invalid"s);
     }
-    return {word, is_minus, IsStopWord(word)};
+    return {string{word}, is_minus, IsStopWord(word)};
 }
 
-SearchServer::NoUniqueQuery SearchServer::ParseNoUniqueQuery(const string& text) const {
+SearchServer::NoUniqueQuery SearchServer::ParseNoUniqueQuery(string_view text) const {
     NoUniqueQuery result;
-    for (const string& word : SplitIntoWords(text)) {
+    for (const auto& word : SplitIntoWordsView(text)) {
         const auto query_word = ParseQueryWord(word);
         if (!query_word.is_stop) {
             if (query_word.is_minus) {
@@ -118,12 +118,12 @@ double SearchServer::ComputeWordInverseDocumentFreq(const string& word) const {
     return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
 }
 
-const map<string, double>& SearchServer::GetWordFrequencies(int document_id) const {
+const map<string_view, double>& SearchServer::GetWordFrequencies(int document_id) const {
     if (document_to_word_freqs_.count(document_id)) {
         return document_to_word_freqs_.at(document_id);
     }
 
-    static const map<string, double> m;
+    static const map<string_view, double> m;
     return m;
 }
 

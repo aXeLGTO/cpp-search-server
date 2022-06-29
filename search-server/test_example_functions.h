@@ -66,7 +66,7 @@ void TestQuery(std::string_view mark, QueriesProcessor processor, const SearchSe
 
 void PrintDocument(const Document& document);
 
-void PrintMatchDocumentResult(int document_id, const std::vector<std::string>& words, DocumentStatus status);
+void PrintMatchDocumentResult(int document_id, const std::vector<std::string_view>& words, DocumentStatus status);
 
 void AddDocument(SearchServer& search_server, int document_id, const std::string& document,
                  DocumentStatus status, const std::vector<int>& ratings);

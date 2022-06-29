@@ -3,12 +3,14 @@
 #include <vector>
 #include <set>
 #include <string>
+#include <string_view>
 #include <map>
 #include <tuple>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <execution>
+#include <functional>
 
 #include "string_processing.h"
 #include "document.h"
@@ -49,12 +51,12 @@ public:
         return document_ids_.end();
     }
 
-    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(std::string_view raw_query, int document_id) const;
 
     template<typename Policy>
-    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(Policy&& policy, const std::string& raw_query, int document_id) const;
+    std::tuple<std::vector<std::string_view>, DocumentStatus> MatchDocument(Policy&& policy, std::string_view raw_query, int document_id) const;
 
-    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    const std::map<std::string_view, double>& GetWordFrequencies(int document_id) const;
 
     void RemoveDocument(int document_id);
 
@@ -67,15 +69,15 @@ private:
         DocumentStatus status;
     };
 
-    const std::set<std::string> stop_words_;
-    std::map<std::string, std::map<int, double>> word_to_document_freqs_;
-    std::map<int, std::map<std::string, double>> document_to_word_freqs_;
+    const std::set<std::string, std::less<>> stop_words_;
+    std::map<std::string, std::map<int, double>, std::less<>> word_to_document_freqs_;
+    std::map<int, std::map<std::string_view, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
     std::set<int> document_ids_;
 
-    bool IsStopWord(const std::string& word) const;
+    bool IsStopWord(std::string_view word) const;
 
-    static bool IsValidWord(const std::string& word);
+    static bool IsValidWord(std::string_view word);
 
     std::vector<std::string> SplitIntoWordsNoStop(const std::string& text) const;
 
@@ -87,7 +89,7 @@ private:
         bool is_stop;
     };
 
-    QueryWord ParseQueryWord(const std::string& text) const;
+    QueryWord ParseQueryWord(std::string_view text) const;
 
     struct NoUniqueQuery {
         std::vector<std::string> plus_words;
@@ -100,7 +102,7 @@ private:
     };
 
     Query ParseQuery(const std::string& text) const;
-    NoUniqueQuery ParseNoUniqueQuery(const std::string& text) const;
+    NoUniqueQuery ParseNoUniqueQuery(std::string_view text) const;
 
     double ComputeWordInverseDocumentFreq(const std::string& word) const;
 
@@ -178,7 +180,7 @@ void SearchServer::RemoveDocument(Policy policy, int document_id) {
     }
 
     const auto& words_in_document = document_to_word_freqs_[document_id];
-    vector<string> words(words_in_document.size());
+    vector<string_view> words(words_in_document.size());
     transform(
             policy,
             words_in_document.begin(), words_in_document.end(),
@@ -190,7 +192,7 @@ void SearchServer::RemoveDocument(Policy policy, int document_id) {
             policy,
             words.begin(), words.end(),
             [this, document_id](const auto& w) {
-                word_to_document_freqs_[w].erase(document_id);
+                word_to_document_freqs_.find(w)->second.erase(document_id);
             });
     document_to_word_freqs_.erase(document_id);
     documents_.erase(document_id);
@@ -198,7 +200,7 @@ void SearchServer::RemoveDocument(Policy policy, int document_id) {
 }
 
 template<typename Policy>
-std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(Policy&& policy, const std::string& raw_query, int document_id) const {
+std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(Policy&& policy, std::string_view raw_query, int document_id) const {
     using namespace std;
 
     if (document_ids_.count(document_id) == 0) {
@@ -212,11 +214,11 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
         };
 
     if (any_of(policy, query.minus_words.begin(), query.minus_words.end(), predicate)) {
-        static const vector<string> v;
+        static const vector<string_view> v;
         return {v, documents_.at(document_id).status};
     }
 
-    vector<string> matched_words(query.plus_words.size());
+    vector<string_view> matched_words(query.plus_words.size());
     auto it = copy_if(
         policy,
         query.plus_words.begin(), query.plus_words.end(),

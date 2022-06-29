@@ -461,15 +461,4 @@ void TestBenchmarkMatch() {
 
     TEST_MATCH(seq);
     TEST_MATCH(par);
-
-    {
-        LOG_DURATION("old"s);
-        const int document_count = search_server.GetDocumentCount();
-        int word_count = 0;
-        for (int id = 0; id < document_count; ++id) {
-            const auto [words, status] = search_server.MatchDocument(query, id);
-            word_count += words.size();
-        }
-        std::cout << word_count << std::endl;
-    }
 }

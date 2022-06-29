@@ -206,13 +206,12 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
     }
 
     const auto query = ParseNoUniqueQuery(raw_query);
+    const auto predicate = [document_id, this](const auto& word){
+        return word_to_document_freqs_.count(word)
+            && word_to_document_freqs_.at(word).count(document_id);
+        };
 
-    if (any_of(
-            policy,
-            query.minus_words.begin(), query.minus_words.end(),
-            [this, document_id](const auto& word){
-                return word_to_document_freqs_.at(word).count(document_id);
-            })) {
+    if (any_of(policy, query.minus_words.begin(), query.minus_words.end(), predicate)) {
         static const vector<string> v;
         return {v, documents_.at(document_id).status};
     }
@@ -222,15 +221,14 @@ std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument
         policy,
         query.plus_words.begin(), query.plus_words.end(),
         matched_words.begin(),
-        [document_id, this](const auto& word){
-            return word_to_document_freqs_.at(word).count(document_id);
-        });
+        predicate
+    );
 
     sort(policy, matched_words.begin(), it);
     matched_words.erase(
-            unique(policy, matched_words.begin(), it),
-            matched_words.end()
-        );
+        unique(policy, matched_words.begin(), it),
+        matched_words.end()
+    );
 
     return {matched_words, documents_.at(document_id).status};
 }

@@ -1,5 +1,6 @@
 #include "search_server.h"
 #include <numeric>
+#include <utility>
 
 using namespace std;
 
@@ -18,7 +19,11 @@ void SearchServer::AddDocument(int document_id, string_view document, DocumentSt
     const auto words = SplitIntoWordsNoStop(document);
     const double inv_word_count = 1.0 / words.size();
     for (const auto& word : words) {
-        word_to_document_freqs_[string{word}][document_id] += inv_word_count;
+        auto it = word_to_document_freqs_.find(word);
+        if (it == word_to_document_freqs_.end()) {
+            it = word_to_document_freqs_.emplace(make_pair(string{word}, map<int, double>{})).first;
+        }
+        it->second[document_id] += inv_word_count;
         document_to_word_freqs_[document_id][word] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});

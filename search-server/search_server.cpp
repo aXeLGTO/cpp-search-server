@@ -24,7 +24,7 @@ void SearchServer::AddDocument(int document_id, string_view document, DocumentSt
             it = word_to_document_freqs_.emplace(make_pair(string{word}, map<int, double>{})).first;
         }
         it->second[document_id] += inv_word_count;
-        document_to_word_freqs_[document_id][word] += inv_word_count;
+        document_to_word_freqs_[document_id][it->first] += inv_word_count;
     }
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
     document_ids_.insert(document_id);

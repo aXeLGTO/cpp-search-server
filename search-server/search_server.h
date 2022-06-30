@@ -208,12 +208,12 @@ std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDoc
         throw out_of_range("Document with id "s + to_string(document_id) + " not exist"s);
     }
 
-    const auto query = ParseNonUniqueQuery(raw_query);
-    const auto predicate = [document_id, this](const auto& word){
-        auto it = word_to_document_freqs_.find(word);
-        return it != word_to_document_freqs_.end()
-            && it->second.count(document_id);
-        };
+    const auto& query = ParseNonUniqueQuery(raw_query);
+    const auto& words_to_freqs = document_to_word_freqs_.find(document_id)->second;
+    const auto& predicate = [&words_to_freqs](const auto& word){
+        const auto& it = words_to_freqs.find(word);
+        return it != words_to_freqs.end();
+    };
 
     if (any_of(policy, query.minus_words.begin(), query.minus_words.end(), predicate)) {
         static const vector<string_view> v;
@@ -225,12 +225,12 @@ std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDoc
         policy,
         query.plus_words.begin(), query.plus_words.end(),
         matched_words.begin(),
-        [this, document_id](const auto& word){
-            auto it = word_to_document_freqs_.find(word);
-            return it != word_to_document_freqs_.end() && it->second.count(document_id) ? it->first : ""sv;
+        [&words_to_freqs](const auto& word){
+            const auto& it = words_to_freqs.find(word);
+            return it != words_to_freqs.end() ? it->first : ""sv;
     });
 
-    auto it = remove(policy, matched_words.begin(), matched_words.end(), ""sv);
+    const auto& it = remove(policy, matched_words.begin(), matched_words.end(), ""sv);
 
     sort(policy, matched_words.begin(), it);
     matched_words.erase(

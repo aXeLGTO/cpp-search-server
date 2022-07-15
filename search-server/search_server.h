@@ -209,7 +209,7 @@ std::vector<Document> SearchServer::FindAllDocuments(const std::execution::paral
         query.plus_words.end()
     );
 
-    ConcurrentMap<int, double> document_to_relevance(100);
+    ConcurrentMap<int, double> document_to_relevance(8);
     for_each(
             par,
             query.plus_words.begin(), query.plus_words.end(),

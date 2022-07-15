@@ -31,14 +31,11 @@ void SearchServer::AddDocument(int document_id, string_view document, DocumentSt
 }
 
 vector<Document> SearchServer::FindTopDocuments(string_view raw_query, DocumentStatus status) const {
-    return FindTopDocuments(
-        raw_query, [status](int document_id, DocumentStatus document_status, int rating) {
-            return document_status == status;
-        });
+    return FindTopDocuments(execution::seq, raw_query, status);
 }
 
 vector<Document> SearchServer::FindTopDocuments(string_view raw_query) const {
-    return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+    return FindTopDocuments(execution::seq, raw_query);
 }
 
 int SearchServer::GetDocumentCount() const {
@@ -140,3 +137,112 @@ void SearchServer::RemoveDocument(int document_id) {
     RemoveDocument(execution::seq, document_id);
 }
 
+void SearchServer::RemoveDocument(const std::execution::sequenced_policy& seq, int document_id) {
+    for (const auto& [word, _] : document_to_word_freqs_[document_id]) {
+        auto it = word_to_document_freqs_.find(word);
+        if (it != word_to_document_freqs_.end()) {
+            it->second.erase(document_id);
+        }
+    }
+    document_to_word_freqs_.erase(document_id);
+    documents_.erase(document_id);
+    document_ids_.erase(document_id);
+}
+
+void SearchServer::RemoveDocument(const std::execution::parallel_policy& policy, int document_id) {
+    using namespace std;
+
+    if (document_ids_.count(document_id) == 0) {
+        return;
+    }
+
+    const auto& words_in_document = document_to_word_freqs_[document_id];
+    vector<string_view> words(words_in_document.size());
+    transform(
+            policy,
+            words_in_document.begin(), words_in_document.end(),
+            words.begin(),
+            [](const auto& p){
+                return p.first;
+            });
+    for_each(
+            policy,
+            words.begin(), words.end(),
+            [this, document_id](const auto& w) {
+                word_to_document_freqs_.find(w)->second.erase(document_id);
+            });
+    document_to_word_freqs_.erase(document_id);
+    documents_.erase(document_id);
+    document_ids_.erase(document_id);
+}
+
+std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::execution::sequenced_policy& seq, std::string_view raw_query, int document_id) const {
+    using namespace std;
+
+    const auto query = ParseQuery(raw_query);
+
+    vector<string_view> matched_words;
+    for (const auto& word : query.plus_words) {
+        auto it = word_to_document_freqs_.find(word);
+        if (it == word_to_document_freqs_.end()) {
+            continue;
+        }
+        if (it->second.count(document_id)) {
+            matched_words.push_back(it->first);
+        }
+    }
+
+    for (const auto& word : query.minus_words) {
+        auto it = word_to_document_freqs_.find(word);
+        if (it == word_to_document_freqs_.end()) {
+            continue;
+        }
+        if (it->second.count(document_id)) {
+            static const vector<string_view> v;
+            return {v, documents_.at(document_id).status};
+        }
+    }
+
+
+    return {matched_words, documents_.at(document_id).status};
+}
+
+std::tuple<std::vector<std::string_view>, DocumentStatus> SearchServer::MatchDocument(const std::execution::parallel_policy& policy, std::string_view raw_query, int document_id) const {
+    using namespace std;
+
+    if (document_ids_.count(document_id) == 0) {
+        throw out_of_range("Document with id "s + to_string(document_id) + " not exist"s);
+    }
+
+    const auto& query = ParseNonUniqueQuery(raw_query);
+    const auto& words_to_freqs = document_to_word_freqs_.find(document_id)->second;
+    const auto& predicate = [&words_to_freqs](const auto& word){
+        const auto& it = words_to_freqs.find(word);
+        return it != words_to_freqs.end();
+    };
+
+    if (any_of(policy, query.minus_words.begin(), query.minus_words.end(), predicate)) {
+        static const vector<string_view> v;
+        return {v, documents_.at(document_id).status};
+    }
+
+    vector<string_view> matched_words(query.plus_words.size());
+    transform(
+        policy,
+        query.plus_words.begin(), query.plus_words.end(),
+        matched_words.begin(),
+        [&words_to_freqs](const auto& word){
+            const auto& it = words_to_freqs.find(word);
+            return it != words_to_freqs.end() ? it->first : ""sv;
+    });
+
+    const auto& it = remove(policy, matched_words.begin(), matched_words.end(), ""sv);
+
+    sort(policy, matched_words.begin(), it);
+    matched_words.erase(
+        unique(policy, matched_words.begin(), it),
+        matched_words.end()
+    );
+
+    return {matched_words, documents_.at(document_id).status};
+}

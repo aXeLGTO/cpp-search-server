@@ -37,6 +37,12 @@ public:
         return {key, bucket};
     }
 
+    void erase(const Key& key) {
+        auto& bucket = buckets_[static_cast<uint64_t>(key) % buckets_.size()];
+        std::lock_guard guard(bucket.mutex);
+        bucket.map.erase(key);
+    }
+
     std::map<Key, Value> BuildOrdinaryMap() {
         std::map<Key, Value> result;
         for (auto& [mutex, map] : buckets_) {
